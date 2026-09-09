@@ -1,2 +1,15 @@
 vendor/
 .env
+
+# runtime logs
+oci.log
+oci.log.*
+*.log
+
+# runtime cache
+oci_cache.json
+too_many_requests_waiter.txt
+
+# local backups
+*.bak.*
+*.bak
