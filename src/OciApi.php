@@ -66,7 +66,7 @@ class OciApi
     "availabilityDomain": "$availabilityDomain",
     "sourceDetails": {$config->getSourceDetails()},
     "createVnicDetails": {
-        "assignPublicIp": false,
+        "assignPublicIp": true,
         "subnetId": "{$config->subnetId}",
         "assignPrivateDnsRecord": true
     },
@@ -130,6 +130,19 @@ EOD;
         $params = ['compartmentId' => $config->tenancyId];
 
         return $this->call($config, $baseUrl, 'GET', null, $params);
+    }
+
+    /**
+     * @param OciConfig $config
+     * @param string $instanceId
+     * @return array
+     * @throws ApiCallException
+     * @throws CurlException
+     */
+    public function getInstanceVnics(OciConfig $config, string $instanceId): array
+    {
+        $baseUrl = "{$this->getBaseApiUrl($config)}/instances/" . $instanceId . "/vnics/";
+        return $this->call($config, $baseUrl, "GET");
     }
 
     public function checkExistingInstances(OciConfig $config, array $listResponse, string $shape, int $maxRunningInstancesOfThatShape): string
@@ -255,6 +268,39 @@ EOD;
         }
 
         return HttpClient::getResponse($curlOptions);
+    }
+
+    /**
+     * Resize an existing instance's shape config (OCPUs / memory).
+     *
+     * OCI allows changing shapeConfig on a running A1.Flex instance, but
+     * capacity must be available. If not, the API returns 500 InternalError
+     * with "Out of host capacity" and the instance stays untouched.
+     *
+     * @param OciConfig $config
+     * @param string $instanceId
+     * @param int $ocpus
+     * @param int $memoryInGBs
+     * @return array
+     *
+     * @throws ApiCallException
+     * @throws CurlException
+     */
+    public function updateInstanceShape(
+        OciConfig $config,
+        string $instanceId,
+        int $ocpus,
+        int $memoryInGBs
+    ): array
+    {
+        $baseUrl = "{$this->getBaseApiUrl($config)}/instances/" . $instanceId;
+        $body = json_encode([
+            'shapeConfig' => [
+                'ocpus' => $ocpus,
+                'memoryInGBs' => $memoryInGBs,
+            ],
+        ]);
+        return $this->call($config, $baseUrl, 'PUT', $body);
     }
 
     public function setWaiter(TooManyRequestsWaiterInterface $waiter): void
