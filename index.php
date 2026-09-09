@@ -72,13 +72,13 @@ if (getenv('OCI_MAX_INSTANCES') !== false) {
     $maxRunningInstancesOfThatShape = (int) getenv('OCI_MAX_INSTANCES');
 }
 
-$instances = $api->getInstances($config);
-
-$existingInstances = $api->checkExistingInstances($config, $instances, $shape, $maxRunningInstancesOfThatShape);
-if ($existingInstances) {
-    echo "$existingInstances\n";
-    return;
-}
+// P0-optimized: skip getInstances() to save 25% API quota (never succeeded)
+// $instances = $api->getInstances($config);
+// $existingInstances = $api->checkExistingInstances($config, $instances, $shape, $maxRunningInstancesOfThatShape);
+// if ($existingInstances) {
+//     echo "$existingInstances\n";
+//     return;
+// }
 
 if (!empty($config->availabilityDomains)) {
     if (is_array($config->availabilityDomains)) {
@@ -110,7 +110,7 @@ foreach ($availabilityDomains as $availabilityDomainEntity) {
             strpos($message, 'Out of host capacity') !== false
         ) {
             // trying next availability domain
-            sleep(16);
+            usleep(500000); // P0-optimized: was sleep(16)
             continue;
         }
 
