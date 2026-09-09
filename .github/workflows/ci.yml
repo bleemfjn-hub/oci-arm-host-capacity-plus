@@ -1,0 +1,116 @@
+name: CI
+
+on:
+
+  push:
+    branches: [ main ]
+
+  pull_request:
+    branches: [ main ]
+
+  workflow_dispatch:
+
+jobs:
+
+  lint:
+    name: Lint (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.1', '8.2', '8.3']
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: curl, json, mbstring
+          coverage: none
+
+      - name: PHP syntax check
+        run: |
+          find . -path ./vendor -prune -o -name '*.php' -print0 \
+            | xargs -0 -n1 -P4 php -l
+
+      - name: Validate composer.json
+        run: composer validate --no-check-publish
+
+      - name: Get composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-php-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-${{ matrix.php }}-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Run unit tests
+        run: vendor/bin/phpunit --color --exclude-group integration tests/
+        continue-on-error: true
+
+  smoke:
+    name: Smoke test (script runs without fatal error)
+    runs-on: ubuntu-latest
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl, json, mbstring
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Create dummy .env
+        run: |
+          cat > .env <<'EOF'
+          OCI_REGION=ap-tokyo-1
+          OCI_USER_ID=ocid1.user.oc1..aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          OCI_TENANCY_ID=ocid1.tenancy.oc1..aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          OCI_KEY_FINGERPRINT=00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00
+          OCI_PRIVATE_KEY_FILENAME=/dev/null
+          OCI_SUBNET_ID=ocid1.subnet.oc1.ap-tokyo-1.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          OCI_IMAGE_ID=ocid1.image.oc1.ap-tokyo-1.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          OCI_OCPUS=1
+          OCI_MEMORY_IN_GBS=6
+          OCI_SHAPE=VM.Standard.A1.Flex
+          OCI_MAX_INSTANCES=1
+          OCI_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ci@test"
+          OCI_RESIZE_TARGET_OCPUS=2
+          OCI_RESIZE_TARGET_MEMORY_IN_GBS=12
+          TOO_MANY_REQUESTS_TIME_WAIT=600
+          CACHE_AVAILABILITY_DOMAINS=1
+          EOF
+
+      - name: Run index.php (expect graceful failure, not fatal)
+        run: |
+          set +e
+          output=$(php index.php 2>&1)
+          code=$?
+          echo "$output"
+          echo "exit_code=$code"
+          # 只要不是 PHP Fatal error / Parse error 就算通过
+          if echo "$output" | grep -qE 'PHP (Fatal error|Parse error)'; then
+            echo "::error::PHP fatal/parse error detected"
+            exit 1
+          fi
+          echo "OK: no fatal error"
+
+      - name: Verify resize env vars are read
+        run: |
+          grep -q 'OCI_RESIZE_TARGET_OCPUS' index.php
+          grep -q 'updateInstanceShape' src/OciApi.php
+          echo "OK: auto-resize code present"

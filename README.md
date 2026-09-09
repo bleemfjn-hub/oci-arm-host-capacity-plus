@@ -1,5 +1,11 @@
 # oci-arm-host-capacity-plus
 
+[![CI](https://github.com/bleemfjn-hub/oci-arm-host-capacity-plus/actions/workflows/ci.yml/badge.svg)](https://github.com/bleemfjn-hub/oci-arm-host-capacity-plus/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PHP](https://img.shields.io/badge/PHP-7.0%20--%208.3-blue.svg)](https://www.php.net/)
+
+**中文** | [English](README_EN.md)
+
 > 甲骨文云（OCI）Always Free ARM 实例自动抢购脚本，**先抢小配置，抢到后自动升级**。
 
 基于 [hitrov/oci-arm-host-capacity](https://github.com/hitrov/oci-arm-host-capacity) 改造，增加了三个实用特性：
